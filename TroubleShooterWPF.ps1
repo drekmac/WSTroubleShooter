@@ -88,7 +88,7 @@ Function Install-Client($comp){
     try{
         Remove-Item "\\$comp\c$\Windows\Temp\CCMsetup.exe" -Force -ErrorAction Ignore
         Copy-Item -Path '\\wdc-vsdsps1p01\SMS_PS1\Client\ccmsetup.exe' -Destination "\\$comp\c$\Windows\Temp" -Force
-        Invoke-Command -computername 'W943ZH02' -ScriptBlock {Start-Process -FilePath "c:\Windows\Temp\ccmsetup.exe" -ArgumentList "/forceinstall","SMSSITECODE=PS1","FSP=WDC-VSDFSPR1P01","CCMENABLELOGGING=TRUE","CCMLOGLEVEL=0"}
+        Invoke-Command -computername $comp -ScriptBlock {Start-Process -FilePath "c:\Windows\Temp\ccmsetup.exe" -ArgumentList "/forceinstall","SMSSITECODE=PS1","FSP=WDC-VSDFSPR1P01","CCMENABLELOGGING=TRUE","CCMLOGLEVEL=0"}
         CMTrace.exe "\\$comp\c$\Windows\ccmsetup\logs\ccmsetup.log"
     }catch{
         [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
