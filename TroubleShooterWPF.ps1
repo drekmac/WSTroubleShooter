@@ -1,18 +1,10 @@
+#Created for Powershell 7
 Add-Type -AssemblyName PresentationFramework
 
 #Functions
-Function Get-Ping($comp){    
-    try{
-        $re=Test-Connection -Computername $Comp -Count 2 -ErrorAction Stop
-        if($re){
-            $ping.Content = "True"
-        }else{
-            $ping.Content = "False"
-        }        
-    }catch{
-        [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
-        $ping.Content = "False"
-    }    
+Function Get-Ping($comp){  
+    $res.Text += Test-Connection -TargetName $comp | Out-String
+    $res.ScrollToEnd()
 }
 Function Get-Basic($comp){
     try{
@@ -38,6 +30,7 @@ Function Get-Basic($comp){
             "C:_Free" = $freedisk
             "RAM" = $RAM
         }
+        $res.text += "`n---------- Basic Info ----------`n"
         $res.text += $ps | Select-Object Name,IP,Model,OS,OS_Ver,BIOS,Uptime,C:_Total,C:_Free,RAM | Out-String
         $res.ScrollToEnd()
     }catch{
@@ -62,6 +55,7 @@ Function Get-TPMinfo($comp){
             "Owned" = $tpminfo.IsOwned_InitialValue
             "Bios" = $Bios.SMBIOSBIOSVersion
         }
+        $res.text += "`n---------- TPM Info ----------`n"
         $res.text += $ps | Select-Object Name,FullVer,Ver,Spec,Enabled,Activated,Owned,Bios | Out-String
         $res.ScrollToEnd()
     }catch{
@@ -75,6 +69,7 @@ Function Get-CompSoftInfo($comp){
     try{
         $session = New-CimSession -ComputerName $Comp -ErrorAction Stop
         $softInfo = Get-CimInstance Win32Reg_AddRemovePrograms -CimSession $session | Select-Object DisplayName,Version | Sort-Object DisplayName | Format-Table -AutoSize | Out-String
+        $res.text += "`n---------- Software Installs ----------`n"
         $res.text += $comp + "`n" + $softInfo
         $res.ScrollToEnd()
     }catch{
@@ -109,7 +104,7 @@ Function Start-PolicyEval($comp){
         $upeval = Invoke-CIMMethod -CimSession $session -Namespace root\ccm -ClassName SMS_CLIENT -MethodName TriggerSchedule -Arguments @{sScheduleID = '{00000000-0000-0000-0000-000000000108}'}
         if($upeval){$res.Text += "`nUpdate evaluation initiated";$res.ScrollToEnd()}else{$res.text += "`nUpdate evaluation failed";$res.ScrollToEnd()}
         $hw = Invoke-CIMMethod -CimSession $session -Namespace root\ccm -ClassName SMS_CLIENT -MethodName TriggerSchedule -Arguments @{sScheduleID = '{00000000-0000-0000-0000-000000000001}'}
-        if($hw){$res.Text += "`nHardware scan initiated";$res.ScrollToEnd()}else{$res.text += "`nHardware scan failed";$res.ScrollToEnd()}
+        if($hw){$res.Text += "`nHardware scan initiated`n";$res.ScrollToEnd()}else{$res.text += "`nHardware scan failed`n";$res.ScrollToEnd()}
     }catch{
         [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
     }
@@ -117,15 +112,44 @@ Function Start-PolicyEval($comp){
         Remove-CimSession $session
     } 
 }
+function get-adinfo {
+    param (
+        [Parameter(Mandatory)]
+        [string]$CompName
+    )
+    $properties =@(
+    'Name'
+    'CanonicalName'
+    'Created'
+    'Description'
+    'Deleted'
+    'DistinguishedName'
+    'Enabled'
+    'IPv4Address'
+    'LastLogonTimestamp'
+    'MemberOf'
+    'Modified'
+    'OperatingSystem'
+    'OperatingSystemVersion'
+    'PasswordLastSet'
+    )
+    $adres = get-adcomputer -Identity $compName -Properties $properties
+    $res.Text += "`n---------- AD Info ----------`n"
+    $res.Text += $adres | Select-Object Name,@{Name="LastLogonTimeStamp";expression={([datetime]::FromFileTime($_.LastLogonTimeStamp))}},Description,Created,Modified,Deleted,Enabled,OperatingSystem,OperatingSystemVersion,PasswordLastSet,IPv4address,CanonicalName | Format-List | Out-String
+    $res.Text += "`n---------- Group Membership ----------`n"
+    $res.Text += $adres.MemberOf | Format-List | Out-String
+    $res.ScrollToEnd()
+}
 
 #GUI
 [xml]$Form = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="Workstation TroubleShooter" Height="800" Width="800" Background="#FF262626">
+        Title="Workstation TroubleShooter" Height="800" Width="1200" Background="#FF262626">
         <StackPanel>
             <Label Name="Title" Content="Workstation Troubleshooter" Margin="10,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" Height="50" Foreground="DarkGray" FontSize="21" />
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110" />
                     <ColumnDefinition Width="110" />
                     <ColumnDefinition Width="110" />
                     <ColumnDefinition Width="110" />
@@ -142,8 +166,6 @@ Function Start-PolicyEval($comp){
                 <Label Name="Computer" Content="Computer" HorizontalAlignment="Left" Height="26" VerticalAlignment="Center" Foreground="DarkGray"/>
                 <TextBox Name="Comp" Grid.Column="1" HorizontalAlignment="Stretch" Width="100" Text="W3XTZFH2" VerticalAlignment="Center" Background="DarkGray" />
                 <Button Name="TestCon" Grid.Column="2"  ToolTip="Ping the computer once" Content="Test Connection" HorizontalAlignment="Left" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
-                <Label Name="Ping" Grid.Row="1" Content="Ping Check" HorizontalAlignment="Left" Height="26" VerticalAlignment="Center" Foreground="DarkGray"/>
-                <Label Name="PingRes" Grid.Column="1" Grid.Row="1" Content="" HorizontalAlignment="Left" Height="26" VerticalAlignment="Center" Foreground="DarkGray"/>
                 <Label Name="PClabel" Grid.Row="2" Content="From PC" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="DarkGray"/>
                 <Button Name="Basic" Grid.Row="3" ToolTip="Basic WMI calls" Content="Basic Info" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
                 <Button Name="TPM" Grid.Row="4" ToolTip="TPM WMI calls" Content="TPM Info" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
@@ -158,9 +180,11 @@ Function Start-PolicyEval($comp){
                 <Button Name="ClientCheck" Grid.Column="2" Grid.Row="3" ToolTip="ConfigMgr client info" Content="Client Check" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
                 <Button Name="ClientInstall" Grid.Column="2" Grid.Row="4" ToolTip="Install ConfigMgr client from \\wdc-vsdsps1p01\SMS_PS1\Client" Content="Install Client" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
                 <Button Name="PolicyEval" Grid.Column="2" Grid.Row="5" ToolTip="Evaluate machine policies, app deployments, updates, and hardware inventory scan" Content="Policy Eval" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
+                <Label Name="ADInfo" Grid.Column="3" Grid.Row="2" Content="AD Info" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="DarkGray"/>
+                <Button Name="GetADInfo" Grid.Column="3" Grid.Row="3" ToolTip="AD info" Content="AD Info" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
             </Grid>
             <Label Name="Res" Content="Results" Margin="10" HorizontalAlignment="Left" Height="24" VerticalAlignment="Top" Width="69" Foreground="DarkGray" FontWeight="Bold"/>                                
-            <TextBox Name="Results" Margin="10" VerticalScrollBarVisibility="Auto" HorizontalAlignment="Left" Height="400" TextWrapping="Wrap" VerticalAlignment="Top" Width="700" Background="LightGray" />            
+            <TextBox Name="Results" Margin="10" VerticalScrollBarVisibility="Auto" HorizontalAlignment="Left" Height="400" TextWrapping="Wrap" VerticalAlignment="Top" Width="1000" Background="LightGray" />            
         </StackPanel>
 </Window>
 "@
@@ -172,7 +196,6 @@ $Win = [Windows.Markup.XamlReader]::Load( $NR )
 $TestCon = $Win.FindName("TestCon")
 $comp = $win.FindName("Comp")
 $res = $win.FindName("Results")
-$ping = $win.FindName("PingRes")
 $basic = $win.FindName("Basic")
 $tpm = $win.FindName("TPM")
 $compSoft = $win.FindName("CompSoftware")
@@ -184,6 +207,7 @@ $PingT = $win.FindName("PingT")
 $ClientCheck = $win.FindName("ClientCheck")
 $ClientInstall = $win.FindName("ClientInstall")
 $PolicyEval = $win.FindName("PolicyEval")
+$ad = $win.FindName("GetADInfo")
 
 $TestCon.Add_Click({
     $computer = $comp.text
@@ -249,7 +273,7 @@ $PSSession.Add_Click({
         [System.Windows.MessageBox]::Show("Please enter a computer name", "Missing Value")
     }else{
         try{
-            Start-Process -FilePath 'PowerShell.exe' -ArgumentList '-NoExit',"-command `"Enter-PSSession -ComputerName $computer`""
+            Start-Process -FilePath 'pwsh.exe' -ArgumentList '-NoExit',"-command `"Enter-PSSession -ComputerName $computer`""
         }catch{
             [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
         }
@@ -281,7 +305,7 @@ $PingT.Add_Click({
         [System.Windows.MessageBox]::Show("Please enter a computer name", "Missing Value")
     }else{
         try{
-            Start-Process -FilePath 'PowerShell.exe' -ArgumentList '-NoExit',"-command `"Ping -t $Computer`""
+            Start-Process -FilePath 'pwsh.exe' -ArgumentList '-NoExit',"-command `"Ping -t $Computer`""
         }catch{
             [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
         }
@@ -331,5 +355,27 @@ $PolicyEval.Add_Click({
     }
 
 })
+$AD.Add_Click({
+    $computer = $comp.text
+    if($computer -eq ''){
+        [System.Windows.MessageBox]::Show("Please enter a computer name", "Missing Value")
+    }else{
+        try {
+            Get-ADInfo $computer
+        }
+        catch {
+            [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
+        }
+    }
 
+})
+$win.Add_ContentRendered({
+    $psver = $PSVersionTable.PSVersion
+    $res.Text = $psver | Out-String
+    if($psver.Major -ge 7){
+        $res.Text += "This script was designed to run with Powershell 7 and it seems that it is. Gold star for you.`n"
+    }else{
+        $res.Text += "This script was designed to run with Powershell 7 but you seem to be using an earlier version not supported by this script. Somethings may work, but most will probably not.`n"
+    }
+})
 $Win.Showdialog()
