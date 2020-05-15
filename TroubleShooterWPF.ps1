@@ -127,7 +127,6 @@ function get-adinfo {
     'Enabled'
     'IPv4Address'
     'LastLogonTimestamp'
-    'MemberOf'
     'Modified'
     'OperatingSystem'
     'OperatingSystemVersion'
@@ -136,8 +135,115 @@ function get-adinfo {
     $adres = get-adcomputer -Identity $compName -Properties $properties
     $res.Text += "`n---------- AD Info ----------`n"
     $res.Text += $adres | Select-Object Name,@{Name="LastLogonTimeStamp";expression={([datetime]::FromFileTime($_.LastLogonTimeStamp))}},Description,Created,Modified,Deleted,Enabled,OperatingSystem,OperatingSystemVersion,PasswordLastSet,IPv4address,CanonicalName | Format-List | Out-String
+    $res.ScrollToEnd()
+}
+function get-adgroup {
+    param (
+        [Parameter(Mandatory)]
+        [string]$CompName
+    )
+    $adres = get-adcomputer -Identity $compName -Properties MemberOf
     $res.Text += "`n---------- Group Membership ----------`n"
+    $res.Text += $adres.Name + "`n"
     $res.Text += $adres.MemberOf | Format-List | Out-String
+    $res.ScrollToEnd()
+}
+function Get-SCCMdata {
+    param (
+        [Parameter(Mandatory)]
+        [string]$CompName,
+        [string]$query 
+    )
+    $SQLInstance = "wdc-vsdps1dbp02"
+    $SQLDatabase = "CM_PS1"
+    if($query -eq "Hardware")
+    {
+        $select = "
+            select
+            vrs.Name0,
+            stat.LastHWScan,
+            bios.SMBIOSBIOSVersion0,
+            comp.Model0,
+            os.Caption0,
+            vrs.Build01,
+            CASE
+                when tpm.IsEnabled_InitialValue0 = 1 then 'True'
+                else 'False'
+            END AS TPM_Present,
+            CASE
+                when tpm.IsActivated_InitialValue0 = 1 then 'True'
+                else 'False'
+            END AS TPM_Ready,
+            CASE 
+                when tpm.IsOwned_InitialValue0 = 1 then 'True'
+                else 'False'
+            END AS TPM_Owned,
+            tpm.ManufacturerVersion0,
+            tpm.ManufacturerVersionFull200,
+            os.LastBootUpTime0,
+            comp.NumberOfProcessors0,
+            disc.Size0 AS FullDiskSize_GB,
+            disc.FreeSpace0 AS FreeDiskSize_GB,
+            mem.TotalPhysicalMemory00
+            from v_R_System vrs
+            join v_GS_WORKSTATION_STATUS stat on vrs.ResourceID = stat.ResourceID
+            join v_GS_PC_BIOS bios on bios.ResourceID = vrs.ResourceID
+            join v_GS_COMPUTER_SYSTEM comp on vrs.ResourceID = comp.ResourceID
+            join v_GS_OPERATING_SYSTEM OS on vrs.ResourceID = os.ResourceID
+            join v_GS_TPM TPM on vrs.ResourceID = tpm.ResourceID
+            join v_GS_PROCESSOR CPU on vrs.ResourceID = cpu.ResourceID
+            join v_GS_LOGICAL_DISK disc on vrs.ResourceID = disc.ResourceID
+            join PC_Memory_DATA mem on vrs.ResourceID = mem.MachineID
+            where 
+            disc.DeviceID0 = 'C:' AND
+            vrs.Name0 = '$compname'
+            "
+    }
+    if ($query -eq "Collections")
+    {
+        $select = "
+        select fcm.CollectionID, 
+        sw.IsEnabled as 'Maint_Enabled',
+        Col.Name As 'Collection_Name',    
+        sw.Name AS 'MaintWindow_Name',
+        SW.Description AS 'MaintWindowDesc',
+        SW.StartTime AS 'MaintStartTime',
+        sw.Duration as 'MaintDuration',
+        sw.RecurrenceType as 'MaintRecurrance',    
+        sw.ServiceWindowType as 'MaintWind_Type'
+        from v_FullCollectionMembership fcm
+        JOIN v_R_System vrs on fcm.ResourceID = vrs.ResourceID 
+        JOIN v_Collection col on fcm.CollectionID = col.CollectionID 
+        left JOIN v_ServiceWindow sw on fcm.CollectionID = sw.CollectionID
+        Where vrs.Name0='$compname'
+        ORDER BY Col.Name
+        "
+    }
+    if($query -eq "Software")
+    {
+        $select = "
+        select
+        ProductName0,
+        ProductVersion0
+        from
+        v_R_System vrs
+        join v_GS_INSTALLED_SOFTWARE sof on vrs.ResourceID = sof.ResourceID
+        where
+        vrs.Name0 = '$compname'
+        Order by ProductName0
+        " 
+    }
+    $sql = Invoke-Sqlcmd -Query $select -ServerInstance $SQLInstance -Database $SQLDatabase
+    $res.Text += "`n---------- Config Mgr Database Info ----------`n"
+    $res.Text += "`n---------- $query ----------`n"
+    $res.text += $CompName + "`n"
+    if($query -eq 'Collections'){
+        $res.Text += $sql | Format-Table | Out-String
+        $res.Text += "`n---------- Maintenance Windows ----------`n"
+        $res.Text += $sql | Where-Object Maint_Enabled -EQ $true | Select-Object CollectionID,MaintWindow_Name,MaintWindowDesc,MaintStartTime,MaintDuration,MaintRecurrance,Maint_Enabled,MaintWind_Type | Format-List | Out-String
+    }else{
+        $res.Text += $sql | Out-String
+    }
     $res.ScrollToEnd()
 }
 
@@ -149,6 +255,7 @@ function get-adinfo {
             <Label Name="Title" Content="Workstation Troubleshooter" Margin="10,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" Height="50" Foreground="DarkGray" FontSize="21" />
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110" />
                     <ColumnDefinition Width="110" />
                     <ColumnDefinition Width="110" />
                     <ColumnDefinition Width="110" />
@@ -182,6 +289,11 @@ function get-adinfo {
                 <Button Name="PolicyEval" Grid.Column="2" Grid.Row="5" ToolTip="Evaluate machine policies, app deployments, updates, and hardware inventory scan" Content="Policy Eval" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
                 <Label Name="ADInfo" Grid.Column="3" Grid.Row="2" Content="AD Info" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="DarkGray"/>
                 <Button Name="GetADInfo" Grid.Column="3" Grid.Row="3" ToolTip="AD info" Content="AD Info" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
+                <Button Name="GetADGroup" Grid.Column="3" Grid.Row="4" ToolTip="AD Group Membership" Content="AD Groups" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
+                <Label Name="ConfigMgrInfo" Grid.Column="4" Grid.Row="2" Content="ConfigMgr DB" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="DarkGray"/>
+                <Button Name="GetConfigInfo" Grid.Column="4" Grid.Row="3" ToolTip="ConfigMgr info" Content="ConfigMgr Info" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
+                <Button Name="GetConfigColl" Grid.Column="4" Grid.Row="4" ToolTip="ConfigMgr Collections and Maintenance Windows" Content="Collections-Maint" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
+                <Button Name="GetConfigSoft" Grid.Column="4" Grid.Row="5" ToolTip="ConfigMgr Installed Software" Content="Installed Software" HorizontalAlignment="Center" Height="26" Width="100" Margin="5" VerticalAlignment="Center" Background="DarkGray" />
             </Grid>
             <Label Name="Res" Content="Results" Margin="10" HorizontalAlignment="Left" Height="24" VerticalAlignment="Top" Width="69" Foreground="DarkGray" FontWeight="Bold"/>                                
             <TextBox Name="Results" Margin="10" VerticalScrollBarVisibility="Auto" HorizontalAlignment="Left" Height="400" TextWrapping="Wrap" VerticalAlignment="Top" Width="1000" Background="LightGray" />            
@@ -208,6 +320,10 @@ $ClientCheck = $win.FindName("ClientCheck")
 $ClientInstall = $win.FindName("ClientInstall")
 $PolicyEval = $win.FindName("PolicyEval")
 $ad = $win.FindName("GetADInfo")
+$adgrp = $win.FindName("GetADGroup")
+$configinfo = $win.FindName("GetConfigInfo")
+$configcoll = $win.FindName("GetConfigColl")
+$configsoft = $win.FindName("GetConfigSoft")
 
 $TestCon.Add_Click({
     $computer = $comp.text
@@ -362,6 +478,62 @@ $AD.Add_Click({
     }else{
         try {
             Get-ADInfo $computer
+        }
+        catch {
+            [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
+        }
+    }
+
+})
+$adgrp.Add_Click({
+    $computer = $comp.text
+    if($computer -eq ''){
+        [System.Windows.MessageBox]::Show("Please enter a computer name", "Missing Value")
+    }else{
+        try {
+            Get-ADGroup $computer
+        }
+        catch {
+            [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
+        }
+    }
+
+})
+$configinfo.Add_Click({
+    $computer = $comp.text
+    if($computer -eq ''){
+        [System.Windows.MessageBox]::Show("Please enter a computer name", "Missing Value")
+    }else{
+        try {
+            Get-SCCMdata $computer 'Hardware'
+        }
+        catch {
+            [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
+        }
+    }
+
+})
+$configcoll.Add_Click({
+    $computer = $comp.text
+    if($computer -eq ''){
+        [System.Windows.MessageBox]::Show("Please enter a computer name", "Missing Value")
+    }else{
+        try {
+            Get-SCCMdata $computer 'Collections'
+        }
+        catch {
+            [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
+        }
+    }
+
+})
+$configsoft.Add_Click({
+    $computer = $comp.text
+    if($computer -eq ''){
+        [System.Windows.MessageBox]::Show("Please enter a computer name", "Missing Value")
+    }else{
+        try {
+            Get-SCCMdata $computer 'Software'
         }
         catch {
             [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
