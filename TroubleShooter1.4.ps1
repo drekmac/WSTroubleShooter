@@ -46,7 +46,6 @@ $Title.Font = $MSSS13
 $Title.ForeColor = $LightGray
 #Textbox for entering computer name, with my computer name as default to make testing easier
 $CompName = New-Object System.Windows.Forms.TextBox
-$CompName.Text = "W3XTZFH2"
 $CompName.Height = 100
 $CompName.Width = 170
 $CompName.AutoSize = $true
