@@ -186,14 +186,14 @@ function Get-SCCMdata {
             disc.FreeSpace0 AS FreeDiskSize_GB,
             mem.TotalPhysicalMemory00
             from v_R_System vrs
-            join v_GS_WORKSTATION_STATUS stat on vrs.ResourceID = stat.ResourceID
-            join v_GS_PC_BIOS bios on bios.ResourceID = vrs.ResourceID
-            join v_GS_COMPUTER_SYSTEM comp on vrs.ResourceID = comp.ResourceID
-            join v_GS_OPERATING_SYSTEM OS on vrs.ResourceID = os.ResourceID
-            join v_GS_TPM TPM on vrs.ResourceID = tpm.ResourceID
-            join v_GS_PROCESSOR CPU on vrs.ResourceID = cpu.ResourceID
-            join v_GS_LOGICAL_DISK disc on vrs.ResourceID = disc.ResourceID
-            join PC_Memory_DATA mem on vrs.ResourceID = mem.MachineID
+            left join v_GS_WORKSTATION_STATUS stat on vrs.ResourceID = stat.ResourceID
+            left join v_GS_PC_BIOS bios on bios.ResourceID = vrs.ResourceID
+            left join v_GS_COMPUTER_SYSTEM comp on vrs.ResourceID = comp.ResourceID
+            left join v_GS_OPERATING_SYSTEM OS on vrs.ResourceID = os.ResourceID
+            left join v_GS_TPM TPM on vrs.ResourceID = tpm.ResourceID
+            left join v_GS_PROCESSOR CPU on vrs.ResourceID = cpu.ResourceID
+            left join v_GS_LOGICAL_DISK disc on vrs.ResourceID = disc.ResourceID
+            left join PC_Memory_DATA mem on vrs.ResourceID = mem.MachineID
             where 
             disc.DeviceID0 = 'C:' AND
             vrs.Name0 = '$compname'
