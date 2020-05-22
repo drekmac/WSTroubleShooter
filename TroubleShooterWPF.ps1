@@ -82,8 +82,8 @@ Function Get-CompSoftInfo($comp){
 Function Install-Client($comp){
     try{
         Remove-Item "\\$comp\c$\Windows\Temp\CCMsetup.exe" -Force -ErrorAction Ignore
-        Copy-Item -Path '\\wdc-vsdsps1p01\SMS_PS1\Client\ccmsetup.exe' -Destination "\\$comp\c$\Windows\Temp" -Force ########################## CHANGE
-        Invoke-Command -computername $comp -ScriptBlock {Start-Process -FilePath "c:\Windows\Temp\ccmsetup.exe" -ArgumentList "/forceinstall","SMSSITECODE=PS1","FSP=WDC-VSDFSPR1P01","CCMENABLELOGGING=TRUE","CCMLOGLEVEL=0"} ########################## CHANGE
+        Copy-Item -Path '\\itsys-sccm\SMS_PS2\Client\*' -Destination "\\$comp\c$\Windows\Temp" -Force -Recurse ########################## CHANGE
+        Invoke-Command -computername $comp -ScriptBlock {Start-Process -FilePath "c:\Windows\Temp\ccmsetup.exe" -ArgumentList "/forceinstall","SMSSITECODE=PS2","FSP=itsys-sccm","CCMENABLELOGGING=TRUE","CCMLOGLEVEL=0"} ########################## CHANGE
         CMTrace.exe "\\$comp\c$\Windows\ccmsetup\logs\ccmsetup.log"
     }catch{
         [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
@@ -154,8 +154,8 @@ function Get-SCCMdata {
         [string]$CompName,
         [string]$query 
     )
-    $SQLInstance = "wdc-vsdps1dbp02"
-    $SQLDatabase = "CM_PS1"
+    $SQLInstance = "itsys-sccm"
+    $SQLDatabase = "CM_PS2"
     if($query -eq "Hardware")
     {
         $select = "
@@ -547,7 +547,7 @@ $win.Add_ContentRendered({
     if($psver.Major -ge 7){
         $res.Text += "This script was designed to run with Powershell 7 and it seems that it is. Gold star for you.`n"
     }else{
-        $res.Text += "This script was designed to run with Powershell 7 but you seem to be using an earlier version not supported by this script. Somethings may work, but most will probably not.`n"
+        $res.Text += "This script was designed to run with Powershell 7 but you seem to be using an earlier version not supported by this script. Some things may work, but most will probably not.`n"
     }
 })
 $Win.Showdialog()
