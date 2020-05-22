@@ -1,4 +1,4 @@
-#Created for Powershell 7
+#Requires -Version 7
 Add-Type -AssemblyName PresentationFramework
 
 #Functions
