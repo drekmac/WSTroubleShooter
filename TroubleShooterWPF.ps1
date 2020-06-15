@@ -1,4 +1,4 @@
-#Created for Powershell 7
+#Requires -Version 7
 Add-Type -AssemblyName PresentationFramework
 
 #Functions
@@ -82,8 +82,8 @@ Function Get-CompSoftInfo($comp){
 Function Install-Client($comp){
     try{
         Remove-Item "\\$comp\c$\Windows\Temp\CCMsetup.exe" -Force -ErrorAction Ignore
-        Copy-Item -Path '\\wdc-vsdsps1p01\SMS_PS1\Client\ccmsetup.exe' -Destination "\\$comp\c$\Windows\Temp" -Force ########################## CHANGE
-        Invoke-Command -computername $comp -ScriptBlock {Start-Process -FilePath "c:\Windows\Temp\ccmsetup.exe" -ArgumentList "/forceinstall","SMSSITECODE=PS1","FSP=WDC-VSDFSPR1P01","CCMENABLELOGGING=TRUE","CCMLOGLEVEL=0"} ########################## CHANGE
+        Copy-Item -Path '\\itsys-sccm\SMS_PS2\Client\*' -Destination "\\$comp\c$\Windows\Temp" -Force -Recurse ########################## CHANGE
+        Invoke-Command -computername $comp -ScriptBlock {Start-Process -FilePath "c:\Windows\Temp\ccmsetup.exe" -ArgumentList "/forceinstall","SMSSITECODE=PS2","FSP=itsys-sccm","CCMENABLELOGGING=TRUE","CCMLOGLEVEL=0"} ########################## CHANGE
         CMTrace.exe "\\$comp\c$\Windows\ccmsetup\logs\ccmsetup.log"
     }catch{
         [System.Windows.MessageBox]::Show($error[0].Exception.Message,"Error")
@@ -154,8 +154,8 @@ function Get-SCCMdata {
         [string]$CompName,
         [string]$query 
     )
-    $SQLInstance = "wdc-vsdps1dbp02"
-    $SQLDatabase = "CM_PS1"
+    $SQLInstance = "itsys-sccm"
+    $SQLDatabase = "CM_PS2"
     if($query -eq "Hardware")
     {
         $select = "
@@ -186,14 +186,14 @@ function Get-SCCMdata {
             disc.FreeSpace0 AS FreeDiskSize_GB,
             mem.TotalPhysicalMemory00
             from v_R_System vrs
-            join v_GS_WORKSTATION_STATUS stat on vrs.ResourceID = stat.ResourceID
-            join v_GS_PC_BIOS bios on bios.ResourceID = vrs.ResourceID
-            join v_GS_COMPUTER_SYSTEM comp on vrs.ResourceID = comp.ResourceID
-            join v_GS_OPERATING_SYSTEM OS on vrs.ResourceID = os.ResourceID
-            join v_GS_TPM TPM on vrs.ResourceID = tpm.ResourceID
-            join v_GS_PROCESSOR CPU on vrs.ResourceID = cpu.ResourceID
-            join v_GS_LOGICAL_DISK disc on vrs.ResourceID = disc.ResourceID
-            join PC_Memory_DATA mem on vrs.ResourceID = mem.MachineID
+            left join v_GS_WORKSTATION_STATUS stat on vrs.ResourceID = stat.ResourceID
+            left join v_GS_PC_BIOS bios on bios.ResourceID = vrs.ResourceID
+            left join v_GS_COMPUTER_SYSTEM comp on vrs.ResourceID = comp.ResourceID
+            left join v_GS_OPERATING_SYSTEM OS on vrs.ResourceID = os.ResourceID
+            left join v_GS_TPM TPM on vrs.ResourceID = tpm.ResourceID
+            left join v_GS_PROCESSOR CPU on vrs.ResourceID = cpu.ResourceID
+            left join v_GS_LOGICAL_DISK disc on vrs.ResourceID = disc.ResourceID
+            left join PC_Memory_DATA mem on vrs.ResourceID = mem.MachineID
             where 
             disc.DeviceID0 = 'C:' AND
             vrs.Name0 = '$compname'
@@ -547,7 +547,7 @@ $win.Add_ContentRendered({
     if($psver.Major -ge 7){
         $res.Text += "This script was designed to run with Powershell 7 and it seems that it is. Gold star for you.`n"
     }else{
-        $res.Text += "This script was designed to run with Powershell 7 but you seem to be using an earlier version not supported by this script. Somethings may work, but most will probably not.`n"
+        $res.Text += "This script was designed to run with Powershell 7 but you seem to be using an earlier version not supported by this script. Some things may work, but most will probably not.`n"
     }
 })
 $Win.Showdialog()
